@@ -1,0 +1,128 @@
+version: "3.9"
+
+services:
+  # ─── GCP Emulators ────────────────────────────────────────────────
+
+  pubsub-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command: gcloud beta emulators pubsub start --host-port=0.0.0.0:8085 --project=nexum-local
+    ports:
+      - "8085:8085"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  firestore-emulator:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    command: gcloud beta emulators firestore start --host-port=0.0.0.0:8086 --project=nexum-local
+    ports:
+      - "8086:8086"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  gcs-emulator:
+    image: fsouza/fake-gcs-server:latest
+    ports:
+      - "4443:4443"
+    command: -scheme http -port 4443 -public-host localhost:4443
+    volumes:
+      - gcs_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4443/storage/v1/b"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ─── Pub/Sub Topic + Subscription Setup ───────────────────────────
+
+  pubsub-setup:
+    image: gcr.io/google.com/cloudsdktool/google-cloud-cli:emulators
+    depends_on:
+      pubsub-emulator:
+        condition: service_healthy
+    environment:
+      PUBSUB_EMULATOR_HOST: pubsub-emulator:8085
+    entrypoint: >
+      /bin/bash -c "
+        sleep 3 &&
+        curl -s -X PUT 'http://pubsub-emulator:8085/v1/projects/nexum-local/topics/media-events' &&
+        curl -s -X PUT 'http://pubsub-emulator:8085/v1/projects/nexum-local/subscriptions/media-worker-sub'
+          -H 'Content-Type: application/json'
+          -d '{\"topic\":\"projects/nexum-local/topics/media-events\",\"pushConfig\":{\"pushEndpoint\":\"http://nexum-worker:8002/process\"}}'
+        echo 'Pub/Sub setup complete'
+      "
+
+  # ─── Backend Services ─────────────────────────────────────────────
+
+  nexum-worker:
+    build:
+      context: ./nexum-backend/worker
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - GCP_PROJECT_ID=nexum-local
+      - GCS_BUCKET=nexum-assets
+      - USE_GCS_EMULATOR=true
+      - GCS_EMULATOR_HOST=http://gcs-emulator:4443
+      - USE_PUBSUB_EMULATOR=true
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - USE_FIRESTORE_EMULATOR=true
+      - FIRESTORE_EMULATOR_HOST=firestore-emulator:8086
+      - PORT=8002
+    depends_on:
+      gcs-emulator:
+        condition: service_healthy
+      firestore-emulator:
+        condition: service_healthy
+    volumes:
+      - ./nexum-backend/worker:/app
+    restart: unless-stopped
+
+  nexum-ingestion:
+    build:
+      context: ./nexum-backend/ingestion
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - GCP_PROJECT_ID=nexum-local
+      - GCS_BUCKET=nexum-assets
+      - PUBSUB_TOPIC=media-events
+      - USE_GCS_EMULATOR=true
+      - GCS_EMULATOR_HOST=http://gcs-emulator:4443
+      - USE_PUBSUB_EMULATOR=true
+      - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
+      - PORT=8001
+    depends_on:
+      gcs-emulator:
+        condition: service_healthy
+      pubsub-emulator:
+        condition: service_healthy
+    volumes:
+      - ./nexum-backend/ingestion:/app
+    restart: unless-stopped
+
+  # ─── Frontend ─────────────────────────────────────────────────────
+
+  nexum-frontend:
+    build:
+      context: ./nexum-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_INGESTION_API_URL=http://localhost:8001
+      - NEXT_PUBLIC_WORKER_API_URL=http://localhost:8002
+    depends_on:
+      - nexum-ingestion
+      - nexum-worker
+    restart: unless-stopped
+
+volumes:
+  gcs_data:
