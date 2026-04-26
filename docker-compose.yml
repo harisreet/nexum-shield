@@ -74,6 +74,7 @@ services:
       - PUBSUB_EMULATOR_HOST=pubsub-emulator:8085
       - USE_FIRESTORE_EMULATOR=true
       - FIRESTORE_EMULATOR_HOST=firestore-emulator:8086
+      - MOCK_MODEL=true
       - PORT=8002
     depends_on:
       gcs-emulator:

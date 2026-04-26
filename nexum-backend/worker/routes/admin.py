@@ -1,5 +1,5 @@
 """
-NEXUM SHIELD — Worker: Admin Routes
+NEXUM SHIELD — Worker: Admin Routes (pHash Edition)
 Seed endpoint, index stats, result polling, audit log.
 """
 import uuid
@@ -30,7 +30,7 @@ _embedder = EmbeddingEngine()
 
 @router.get("/index-stats", response_model=IndexStats)
 async def get_index_stats():
-    """Return current FAISS index size and version info."""
+    """Return current pHash index size and version info."""
     return IndexStats(
         total_vectors=get_index_size(),
         index_version=settings.INDEX_VERSION,
@@ -48,8 +48,8 @@ async def seed_asset(
 ):
     """
     Add an image to the known reference dataset.
-    Uploads to GCS, generates embedding, adds to FAISS index, persists to Firestore.
-    Re-uploads updated index to GCS after seeding.
+    Preprocesses the image, computes its pHash, and adds it to the
+    in-memory index. Persists the index to GCS for durability.
     """
     asset_id = str(uuid.uuid4())
     image_bytes = await file.read()
@@ -63,11 +63,11 @@ async def seed_asset(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Preprocessing failed: {e}")
 
-    # ── Generate embedding ────────────────────────────────────────
+    # ── Compute pHash ─────────────────────────────────────────────
     try:
         embedding_out = _embedder.process({"image": preprocess_out["image"]})
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Embedding failed: {e}")
+        raise HTTPException(status_code=500, detail=f"pHash generation failed: {e}")
 
     # ── Upload raw image to GCS ───────────────────────────────────
     gcs_path = f"known/{asset_id}.jpg"
@@ -75,10 +75,10 @@ async def seed_asset(
         gcs_service.upload_file(preprocess_out["local_path"], gcs_path)
     except Exception as e:
         log.warning("seed.gcs_upload_failed", error=str(e))
-        # Non-fatal for local dev
+        # Non-fatal — pipeline continues
 
-    # ── Add to FAISS index ────────────────────────────────────────
-    faiss_id = add_to_index(embedding_out["vector"], asset_id)
+    # ── Add to pHash index ────────────────────────────────────────
+    new_size = add_to_index(embedding_out["phash"], asset_id)
 
     # ── Persist index to disk + GCS ───────────────────────────────
     save_faiss_index()
@@ -93,16 +93,16 @@ async def seed_asset(
             asset_id=asset_id,
             name=name or file.filename or asset_id,
             gcs_path=gcs_path,
-            faiss_index=faiss_id,
+            faiss_index=new_size,
         )
     except Exception as e:
         log.warning("seed.firestore_failed", error=str(e))
 
-    log.info("seed.complete", asset_id=asset_id, faiss_id=faiss_id, total=get_index_size())
+    log.info("seed.complete", asset_id=asset_id, phash=embedding_out["phash"], total=new_size)
 
     return SeedResponse(
         asset_id=asset_id,
-        message=f"Asset seeded successfully. Index now has {get_index_size()} vectors.",
+        message=f"Asset seeded successfully. Index now has {new_size} assets.",
     )
 
 

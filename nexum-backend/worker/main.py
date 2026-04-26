@@ -35,7 +35,7 @@ log = structlog.get_logger()
 # ─── Lifespan ─────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: load models. Shutdown: log teardown."""
+    """Startup: load pHash index. No AI model download required."""
     log.info("worker.startup.begin")
 
     # Ensure GCS bucket exists (no-op on real GCS if already exists)
@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.warning("worker.startup.bucket_check_failed", error=str(e))
 
-    # Download FAISS index from GCS → /tmp
+    # Download pHash index from GCS → /tmp
     log.info("worker.startup.downloading_index")
     found = download_index()
     if found:
@@ -52,12 +52,11 @@ async def lifespan(app: FastAPI):
     else:
         log.info("worker.startup.index_not_found_bootstrapping_empty")
 
-    # Load FAISS index into memory
-    log.info("worker.startup.loading_faiss")
+    # Load pHash index into memory (instant — just a JSON dict)
+    log.info("worker.startup.loading_index")
     load_faiss_index()
 
-    # Load CLIP model into memory (~350MB, takes 5–15s on first run)
-    log.info("worker.startup.loading_clip")
+    # pHash requires no AI model download — startup is instant!
     load_clip_model()
 
     log.info("worker.startup.complete")

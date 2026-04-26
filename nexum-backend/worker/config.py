@@ -13,16 +13,15 @@ class Settings(BaseSettings):
     PUBSUB_TOPIC: str = Field(default="media-events", env="PUBSUB_TOPIC")
     PUBSUB_SUBSCRIPTION: str = Field(default="media-worker-sub", env="PUBSUB_SUBSCRIPTION")
 
-    # ─── FAISS Index Paths ────────────────────────────────────────
-    FAISS_INDEX_GCS_PATH: str = "index/faiss.index"
-    FAISS_ID_MAP_GCS_PATH: str = "index/id_map.json"
-    FAISS_LOCAL_PATH: str = "/tmp/faiss.index"
-    FAISS_ID_MAP_LOCAL_PATH: str = "/tmp/id_map.json"
+    # ─── pHash Index Paths ────────────────────────────────────────
+    FAISS_INDEX_GCS_PATH: str = "index/phash_index.json"
+    FAISS_ID_MAP_GCS_PATH: str = "index/phash_index.json"  # same file
+    FAISS_LOCAL_PATH: str = "/tmp/phash_index.json"
+    FAISS_ID_MAP_LOCAL_PATH: str = "/tmp/phash_index.json"  # same file
 
     # ─── Model ────────────────────────────────────────────────────
-    CLIP_MODEL_NAME: str = "openai/clip-vit-base-patch32"
-    MODEL_VERSION: str = "clip_v1"
-    EMBEDDING_DIM: int = 512
+    MODEL_VERSION: str = "phash_v1"
+    HAMMING_THRESHOLD: int = 10   # bits different to consider a match (out of 64)
 
     # ─── Pipeline Thresholds (LOCKED — change requires policy bump) ─
     TOP_K: int = 5
@@ -44,6 +43,8 @@ class Settings(BaseSettings):
 
     USE_FIRESTORE_EMULATOR: bool = False
     FIRESTORE_EMULATOR_HOST: str = "localhost:8086"
+
+    # pHash requires no model — this flag is kept for API compatibility
 
     # ─── Server ───────────────────────────────────────────────────
     PORT: int = 8002

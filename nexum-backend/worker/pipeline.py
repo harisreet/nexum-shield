@@ -1,5 +1,5 @@
 """
-NEXUM SHIELD — Pipeline Orchestrator
+NEXUM SHIELD — Pipeline Orchestrator (pHash Edition)
 Ties all engines together in strict order. No business logic.
 Each stage is isolated — failure in any stage aborts the pipeline.
 """
@@ -36,17 +36,17 @@ async def run_pipeline(
     trace_id: str,
 ) -> dict[str, Any]:
     """
-    Execute the full 6-stage pipeline.
+    Execute the full 6-stage pipeline using pHash matching.
     Returns a complete AnalysisResponse-compatible dict.
     Raises EngineError on any stage failure.
 
     Pipeline:
-      1. Preprocessing
-      2. Embedding (CLIP)
-      3. Matching (FAISS)
-      4. Risk scoring
-      5. Decision (policy)
-      6. Explainability
+      1. Preprocessing      (validation + pHash)
+      2. Embedding          (pHash fingerprint)
+      3. Matching           (Hamming distance search)
+      4. Risk scoring       (deterministic)
+      5. Decision           (policy table)
+      6. Explainability     (rule-based audit)
     """
     ctx = log.bind(trace_id=trace_id, asset_id=asset_id)
     ctx.info("pipeline.start")
@@ -58,16 +58,16 @@ async def run_pipeline(
         "filename": filename,
     })
 
-    # ── Stage 2: Embedding ────────────────────────────────────────
+    # ── Stage 2: Embedding (pHash) ────────────────────────────────
     ctx.info("pipeline.embedding")
     embedding_out = _embedding.process({
         "image": preprocess_out["image"],
     })
 
-    # ── Stage 3: Matching ─────────────────────────────────────────
+    # ── Stage 3: Matching (Hamming Distance) ──────────────────────
     ctx.info("pipeline.matching")
     matching_out = _matching.process({
-        "vector": embedding_out["vector"],
+        "phash": embedding_out["phash"],
     })
 
     candidates = matching_out["candidates"]
@@ -109,7 +109,7 @@ async def run_pipeline(
         "signals": risk_out["signals"],
         "explanation": explain_out["explanation"],
         "matches": candidates,
-        "phash": preprocess_out["phash"],
+        "phash": embedding_out["phash"],
         "model_version": settings.MODEL_VERSION,
         "index_version": settings.INDEX_VERSION,
         "policy_version": settings.POLICY_VERSION,
