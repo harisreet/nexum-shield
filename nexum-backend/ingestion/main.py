@@ -27,10 +27,6 @@ log = structlog.get_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     log.info("ingestion.startup")
-    try:
-        ensure_bucket()
-    except Exception as e:
-        log.warning("ingestion.bucket_check_failed", error=str(e))
     log.info("ingestion.ready")
     yield
     log.info("ingestion.shutdown")
