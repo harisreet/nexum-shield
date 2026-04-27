@@ -5,8 +5,8 @@
 import axios from 'axios';
 import type { UploadResponse, PollResponse, AuditDecision, IndexStats } from '@/types/nexum';
 
-const INGESTION_URL = process.env.NEXT_PUBLIC_INGESTION_API_URL || 'http://localhost:8001';
-const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_API_URL || 'http://localhost:8002';
+const INGESTION_URL = process.env.NEXT_PUBLIC_INGESTION_API_URL;
+const WORKER_URL = process.env.NEXT_PUBLIC_WORKER_API_URL;
 
 const ingestion = axios.create({ baseURL: INGESTION_URL });
 const worker = axios.create({ baseURL: WORKER_URL });
