@@ -18,7 +18,6 @@ import structlog
 
 from schemas import PubSubPushRequest, PubSubEvent
 from pipeline import run_pipeline
-from services import gcs as gcs_service
 from services import firestore as fs_service
 from engines.base import EngineError
 
@@ -45,27 +44,21 @@ async def process_event(request: PubSubPushRequest, background: BackgroundTasks)
         return JSONResponse({"error": "invalid_message", "detail": str(e)}, status_code=200)
 
     ctx = log.bind(trace_id=trace_id, asset_id=event.asset_id)
-    ctx.info("process.received", gcs_path=event.gcs_path)
+    ctx.info("process.received")
 
-    # ── Download image from GCS ───────────────────────────────────
-    local_path = f"/tmp/{event.asset_id}.jpg"
+    # ── Decode image bytes directly from payload (No GCS needed!) ─
     try:
-        gcs_service.download_asset(event.gcs_path, local_path)
+        image_bytes = base64.b64decode(event.image_b64)
     except Exception as e:
-        ctx.error("process.gcs_download_failed", error=str(e))
-        # Return 200 to avoid retry on persistent GCS errors
-        return JSONResponse({"error": "gcs_download_failed"}, status_code=200)
-
-    # ── Read image bytes ──────────────────────────────────────────
-    with open(local_path, "rb") as f:
-        image_bytes = f.read()
+        ctx.error("process.image_decode_failed", error=str(e))
+        return JSONResponse({"error": "invalid_image_encoding"}, status_code=200)
 
     # ── Mark asset as processing ──────────────────────────────────
     try:
         await fs_service.create_asset_record(
             asset_id=event.asset_id,
             trace_id=trace_id,
-            gcs_path=event.gcs_path,
+            gcs_path="",  # Deprecated
             phash="",  # will be updated after preprocessing
             source=event.source,
         )
@@ -76,7 +69,7 @@ async def process_event(request: PubSubPushRequest, background: BackgroundTasks)
     try:
         result = await run_pipeline(
             image_bytes=image_bytes,
-            filename=os.path.basename(event.gcs_path),
+            filename="upload.jpg",
             asset_id=event.asset_id,
             trace_id=trace_id,
         )
@@ -89,10 +82,6 @@ async def process_event(request: PubSubPushRequest, background: BackgroundTasks)
         ctx.error("process.unexpected_error", error=str(e))
         await fs_service.update_asset_status(event.asset_id, "error")
         return JSONResponse({"error": "unexpected_error"}, status_code=200)
-    finally:
-        # Clean up temp file
-        if os.path.exists(local_path):
-            os.remove(local_path)
 
     # ── Persist decision ──────────────────────────────────────────
     decision_record = {

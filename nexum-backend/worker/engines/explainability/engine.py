@@ -1,14 +1,20 @@
 """
 NEXUM SHIELD — Explainability Engine
-Generates a bounded, deterministic explanation from risk data.
-ZERO external API calls. Rule-based template only.
-No hallucination possible. Every explanation is reproducible.
+Attempts to generate an explanation using Gemini API for natural, context-aware reasoning.
+If Gemini fails or no API key is provided, falls back to deterministic rule-based template.
 """
 from typing import Any
+import structlog
 
 from config import settings
 from engines.base import Engine, EngineError
 
+try:
+    from google import genai
+except ImportError:
+    genai = None
+
+log = structlog.get_logger()
 
 # ─── Explanation templates (keyed by decision) ────────────────────
 TEMPLATES = {
@@ -45,11 +51,6 @@ class ExplainabilityEngine(Engine):
     Input:  { "risk_score": float, "signals": list[str],
               "candidates": list[dict], "decision": str }
     Output: { "explanation": str }
-
-    Constraints:
-      - Uses ONLY: risk_score, signals, candidates, decision
-      - No external calls
-      - Deterministic: same inputs → same explanation
     """
 
     def process(self, input_data: dict[str, Any]) -> dict[str, Any]:
@@ -58,17 +59,41 @@ class ExplainabilityEngine(Engine):
         candidates: list[dict] = input_data.get("candidates", [])
         decision: str = input_data.get("decision", "ALLOW")
 
-        explanation = self._generate(risk_score, signals, candidates, decision)
+        # Try Gemini first, fallback to rules
+        explanation = self._generate_with_gemini(risk_score, signals, candidates, decision)
+        if not explanation:
+            explanation = self._generate_rule_based(risk_score, signals, candidates, decision)
 
         return {"explanation": explanation}
 
-    def _generate(
-        self,
-        score: float,
-        signals: list[str],
-        candidates: list[dict],
-        decision: str,
-    ) -> str:
+    def _generate_with_gemini(self, score: float, signals: list[str], candidates: list[dict], decision: str) -> str | None:
+        if not settings.GEMINI_API_KEY or genai is None:
+            return None
+
+        try:
+            client = genai.Client(api_key=settings.GEMINI_API_KEY)
+            
+            prompt = (
+                f"You are the Nexum Shield AI integrity platform. Briefly explain why an asset received the decision: {decision}.\n"
+                f"Context:\n"
+                f"- Risk Score: {score:.2%}\n"
+                f"- Active Risk Signals: {', '.join(signals) if signals else 'None'}\n"
+                f"- Number of known reference matches found: {len(candidates)}\n\n"
+                "Write a concise, professional 1-3 sentence explanation for a trust and safety moderator. "
+                "Do not mention 'Gemini' or act like an assistant. Just provide the direct explanation."
+            )
+            
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=prompt,
+            )
+            
+            return response.text.strip()
+        except Exception as e:
+            log.warning("explainability.gemini_failed", error=str(e))
+            return None  # Trigger fallback
+
+    def _generate_rule_based(self, score: float, signals: list[str], candidates: list[dict], decision: str) -> str:
         template = TEMPLATES.get(decision, TEMPLATES["ALLOW"])
 
         # ── Match summary ─────────────────────────────────────────

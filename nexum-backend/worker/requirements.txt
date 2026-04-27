@@ -8,10 +8,11 @@ Pillow==10.4.0
 imagehash==4.3.1
 numpy==1.26.4
 
-# GCP
-google-cloud-storage==2.18.2
-google-cloud-firestore==2.17.2
-google-cloud-pubsub==2.23.0
+# Database (MongoDB Atlas for Railway, fallback to local JSON in dev)
+pymongo==4.8.0
+
+# Explainability (Gemini AI)
+google-genai==0.3.0
 
 # Utils
 python-multipart==0.0.9

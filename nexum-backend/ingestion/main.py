@@ -11,7 +11,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from config import settings
-from services.gcs import ensure_bucket
 from routes.upload import router as upload_router
 from routes.health import router as health_router
 

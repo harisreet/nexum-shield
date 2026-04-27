@@ -12,7 +12,6 @@ import structlog
 
 from config import settings
 from schemas import UploadResponse
-from services import gcs as gcs_service
 from services import pubsub as pubsub_service
 
 log = structlog.get_logger()
@@ -54,21 +53,12 @@ async def upload_asset(
 
     ctx.info("upload.storing", size_mb=round(size_mb, 2), content_type=content_type)
 
-    # ── Upload to GCS ─────────────────────────────────────────────
-    try:
-        gcs_path = gcs_service.upload_asset(file_bytes, asset_id, content_type)
-    except Exception as e:
-        ctx.error("upload.gcs_failed", error=str(e))
-        raise HTTPException(status_code=500, detail=f"Storage error: {e}")
-
-    ctx.info("upload.stored", gcs_path=gcs_path)
-
-    # ── Publish to Pub/Sub ────────────────────────────────────────
+    # ── Upload to Worker via HTTP (No GCS needed!) ────────────────
     try:
         message_id = pubsub_service.publish_media_event(
             asset_id=asset_id,
             trace_id=trace_id,
-            gcs_path=gcs_path,
+            file_bytes=file_bytes,
             source=source,
         )
     except Exception as e:

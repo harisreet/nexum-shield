@@ -15,7 +15,6 @@ from config import settings
 from engines.preprocessing.processor import PreprocessingEngine
 from engines.embedding.engine import EmbeddingEngine
 from engines.matching.engine import add_to_index, get_index_size, save_faiss_index
-from services import gcs as gcs_service
 from services import firestore as fs_service
 from schemas import IndexStats, SeedResponse
 
@@ -69,30 +68,18 @@ async def seed_asset(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"pHash generation failed: {e}")
 
-    # ── Upload raw image to GCS ───────────────────────────────────
-    gcs_path = f"known/{asset_id}.jpg"
-    try:
-        gcs_service.upload_file(preprocess_out["local_path"], gcs_path)
-    except Exception as e:
-        log.warning("seed.gcs_upload_failed", error=str(e))
-        # Non-fatal — pipeline continues
-
     # ── Add to pHash index ────────────────────────────────────────
     new_size = add_to_index(embedding_out["phash"], asset_id)
 
-    # ── Persist index to disk + GCS ───────────────────────────────
+    # ── Persist index to MongoDB/Disk ─────────────────────────────
     save_faiss_index()
-    try:
-        gcs_service.upload_index()
-    except Exception as e:
-        log.warning("seed.index_upload_failed", error=str(e))
 
-    # ── Register in Firestore ─────────────────────────────────────
+    # ── Register in MongoDB/Firestore ─────────────────────────────
     try:
         await fs_service.add_known_asset(
             asset_id=asset_id,
             name=name or file.filename or asset_id,
-            gcs_path=gcs_path,
+            gcs_path="none",  # GCS removed
             faiss_index=new_size,
         )
     except Exception as e:

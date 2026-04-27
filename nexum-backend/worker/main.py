@@ -16,7 +16,7 @@ from fastapi.responses import JSONResponse
 from config import settings
 from engines.embedding.engine import load_clip_model
 from engines.matching.engine import load_faiss_index
-from services.gcs import download_index, ensure_bucket_exists
+from services import firestore as fs_service
 from routes.process import router as process_router
 from routes.admin import router as admin_router
 from routes.health import router as health_router
@@ -35,24 +35,10 @@ log = structlog.get_logger()
 # ─── Lifespan ─────────────────────────────────────────────────────
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup: load pHash index. No AI model download required."""
+    """Startup: load pHash index into memory."""
     log.info("worker.startup.begin")
 
-    # Ensure GCS bucket exists (no-op on real GCS if already exists)
-    try:
-        ensure_bucket_exists()
-    except Exception as e:
-        log.warning("worker.startup.bucket_check_failed", error=str(e))
-
-    # Download pHash index from GCS → /tmp
-    log.info("worker.startup.downloading_index")
-    found = download_index()
-    if found:
-        log.info("worker.startup.index_downloaded")
-    else:
-        log.info("worker.startup.index_not_found_bootstrapping_empty")
-
-    # Load pHash index into memory (instant — just a JSON dict)
+    # Load pHash index from MongoDB/local disk into memory
     log.info("worker.startup.loading_index")
     load_faiss_index()
 

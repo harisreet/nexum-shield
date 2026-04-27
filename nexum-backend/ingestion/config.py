@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     GCS_BUCKET: str = Field(default="nexum-assets", env="GCS_BUCKET")
     PUBSUB_TOPIC: str = Field(default="media-events", env="PUBSUB_TOPIC")
 
+    # Worker URL — set to Railway URL in production, localhost in dev
+    WORKER_URL: str = Field(default="http://localhost:8002", env="WORKER_URL")
+
+    # MongoDB Atlas connection string — set in Railway env vars
+    # Format: mongodb+srv://user:pass@cluster.mongodb.net/nexum
+    MONGODB_URI: str = Field(default="", env="MONGODB_URI")
+
     USE_GCS_EMULATOR: bool = False
     GCS_EMULATOR_HOST: str = "http://localhost:4443"
 

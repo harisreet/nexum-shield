@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     FAISS_LOCAL_PATH: str = "/tmp/phash_index.json"
     FAISS_ID_MAP_LOCAL_PATH: str = "/tmp/phash_index.json"  # same file
 
+    # ─── Gemini Explainable AI ────────────────────────────────────
+    GEMINI_API_KEY: str = Field(default="", env="GEMINI_API_KEY")
+
     # ─── Model ────────────────────────────────────────────────────
     MODEL_VERSION: str = "phash_v1"
     HAMMING_THRESHOLD: int = 10   # bits different to consider a match (out of 64)

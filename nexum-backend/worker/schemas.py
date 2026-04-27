@@ -53,7 +53,7 @@ class ExplainabilityOutput(BaseModel):
 class PubSubEvent(BaseModel):
     trace_id: str
     asset_id: str
-    gcs_path: str
+    image_b64: str  # Base64 encoded image bytes
     source: str = "api"
     timestamp: str
 
