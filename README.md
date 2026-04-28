@@ -62,23 +62,18 @@ We utilized a rigorous, production-grade technology stack prioritizing execution
 *   **PyTorch**: Core deep learning tensor calculation framework.
 *   **HuggingFace Transformers**: To execute the `openai/clip-vit-base-patch32` visual models.
 *   **Meta FAISS (`faiss-cpu`)**: High-speed, in-memory continuous vector similarity search database.
+*   **Perceptual Hashing (`pHash`)**: Lightweight image fingerprinting method that converts an image into a compact 64-bit binary representation.
+*   **Google Gemini API**: Used for Explainable AI (XAI) to generate human-readable explanations for model decisions
 
 **Backend Services:**
 *   **Python 3.11**: Primary execution language.
 *   **FastAPI**: Underpins both the Ingestion API and the Worker API for asynchronous, high-performance HTTP routing.
-
-**Google Cloud Technologies (Architecture & SDKs):**
-*   **Google Cloud Storage (GCS)**: Designed as the primary data lake for uploading and holding raw digital media assets before processing. 
-*   **Google Cloud Pub/Sub**: Drives our event-driven asynchronous architecture by decoupling the Ingestion API from the heavy Worker Engine.
-*   **Google Cloud Firestore**: Designed as our high-speed NoSQL ledger for writing immutable, append-only AI decision records and audit logs.
-*   **Google Cloud Run**: The target serverless execution environment intended to autoscale our stateless Python AI inference pipelines to zero when unused.
 
 **Frontend Interface:**
 *   **Next.js 14**: Server-side rendered React framework.
 *   **Tailwind CSS**: Utility-first styling for the futuristic dark theme.
 *   **Lucide React**: Modern iconography dynamically reflecting pipeline decisions.
 
-*(Note: The codebase utilizes the official Google Cloud Python SDKs. However, to guarantee execution reliability after Docker infrastructure failures during the hackathon demo, the system is designed with a **Failover Mock Layer** that seamlessly intercepts Cloud API calls and routes them to local volatile storage, proving the resiliency of the detached architectural pattern).*
 
 ---
 
